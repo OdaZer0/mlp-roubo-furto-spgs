@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roubo ou furto? – MLP SSP-SP</title>
+<style>
+ :root{--bg:#f5f6f8;--card:#fff;--ink:#1c2430;--mut:#5d6878;--line:#dde1e7;--roubo:#c8442f;--furto:#2f6fb0;--acc:#1c2430}
+ *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+ main{max-width:880px;margin:0 auto;padding:28px 18px 48px}
+ h1{font-size:1.55rem;margin:0 0 4px} .sub{color:var(--mut);margin:0 0 20px}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
+ .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+ label{display:block;font-size:.85rem;font-weight:600;margin-bottom:4px} select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit}
+ button{margin-top:18px;background:var(--acc);color:#fff;border:0;border-radius:8px;padding:11px 22px;font:inherit;font-weight:600;cursor:pointer} button:hover{opacity:.88}
+ .res h2{margin:0 0 12px;font-size:1.15rem} .big{font-size:1.9rem;font-weight:700}
+ .bar{height:30px;border-radius:6px;overflow:hidden;display:flex;background:var(--line);margin:10px 0 6px}
+ .bar div{display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:600;font-size:.9rem;white-space:nowrap}
+ .roubo{background:var(--roubo)} .furto{background:var(--furto)}
+ .leg{display:flex;justify-content:space-between;font-size:.9rem;color:var(--mut)}
+ .aviso{border-left:4px solid #d49a1c;background:#fff8e6;padding:12px 14px;border-radius:6px;font-size:.92rem}
+ .meta{font-size:.82rem;color:var(--mut)}
+</style></head>
+<body><main>
+<h1>Roubo ou furto?</h1>
+<p class="sub">Classificador MLP de ocorrências de celulares subtraídos na cidade de São Paulo (dados SSP-SP, 2026).</p>
+
+<form class="card" method="post">
+  <div class="grid">
+  {% for f in features %}
+    <div><label for="{{f}}">{{ rotulos[f] }}</label>
+    <select id="{{f}}" name="{{f}}">
+      {% for o in opcoes[f] %}<option value="{{o}}" {{ 'selected' if valores[f]==o }}>{{o}}</option>{% endfor %}
+    </select></div>
+  {% endfor %}
+  </div>
+  <button type="submit">Classificar ocorrência</button>
+</form>
+
+{% if resultado %}
+<section class="card res" aria-live="polite">
+  <h2>Resultado</h2>
+  <div>Classe estimada: <span class="big" style="color:var(--{{resultado.classe}})">{{ resultado.classe|upper }}</span></div>
+  <div class="bar">
+    <div class="roubo" style="width:{{ (resultado.roubo*100)|round(1) }}%">{% if resultado.roubo>=0.12 %}roubo {{ '%.1f'|format(resultado.roubo*100) }}%{% endif %}</div>
+    <div class="furto" style="width:{{ (resultado.furto*100)|round(1) }}%">{% if resultado.furto>=0.12 %}furto {{ '%.1f'|format(resultado.furto*100) }}%{% endif %}</div>
+  </div>
+  <div class="leg"><span>Roubo: {{ '%.1f'|format(resultado.roubo*100) }}%</span><span>Furto: {{ '%.1f'|format(resultado.furto*100) }}%</span></div>
+</section>
+{% endif %}
+
+<div class="aviso"><strong>Como interpretar:</strong> considerando que uma ocorrência aconteceu com estas características, o modelo atribui essas probabilidades às classes “roubo” e “furto”. <strong>Isto não é a chance de um crime acontecer</strong> naquele bairro, dia ou horário; o modelo não calcula risco.</div>
+
+<p class="meta">Modelo: {{ meta.modelo }} · acurácia no teste {{ '%.1f'|format(meta.metricas_teste.acc*100) }}% · F1 (roubo) {{ '%.1f'|format(meta.metricas_teste.f1*100) }}% · treinado com {{ '{:,}'.format(meta.n_registros).replace(',', '.') }} boletins. As probabilidades vêm de uma rede neural com limitações: use como exercício acadêmico.</p>
+</main></body></html>

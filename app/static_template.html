@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roubo ou furto? – MLP SSP-SP</title>
+<style>
+ :root{--bg:#f5f6f8;--card:#fff;--ink:#1c2430;--mut:#5d6878;--line:#dde1e7;--roubo:#c8442f;--furto:#2f6fb0;--acc:#1c2430}
+ *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+ main{max-width:880px;margin:0 auto;padding:28px 18px 48px}
+ h1{font-size:1.55rem;margin:0 0 4px} .sub{color:var(--mut);margin:0 0 20px}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:18px}
+ .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+ label{display:block;font-size:.85rem;font-weight:600;margin-bottom:4px} select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;font:inherit}
+ button{margin-top:18px;background:var(--acc);color:#fff;border:0;border-radius:8px;padding:11px 22px;font:inherit;font-weight:600;cursor:pointer} button:hover{opacity:.88}
+ .res h2{margin:0 0 12px;font-size:1.15rem} .big{font-size:1.9rem;font-weight:700}
+ .bar{height:30px;border-radius:6px;overflow:hidden;display:flex;background:var(--line);margin:10px 0 6px}
+ .bar div{display:flex;align-items:center;padding-left:10px;color:#fff;font-weight:600;font-size:.9rem;white-space:nowrap}
+ .roubo{background:var(--roubo)} .furto{background:var(--furto)}
+ .leg{display:flex;justify-content:space-between;font-size:.9rem;color:var(--mut)}
+ .aviso{border-left:4px solid #d49a1c;background:#fff8e6;padding:12px 14px;border-radius:6px;font-size:.92rem}
+ .meta{font-size:.82rem;color:var(--mut)}
+</style>
+</head>
+<body><main>
+<h1>Roubo ou furto?</h1>
+<p class="sub">Classificador MLP de ocorrências de celulares subtraídos na cidade de São Paulo (dados SSP-SP, 2026).</p>
+
+<form class="card" id="form">
+  <div class="grid" id="campos"></div>
+  <button type="submit">Classificar ocorrência</button>
+</form>
+
+<section class="card res" id="res" aria-live="polite" hidden>
+  <h2>Resultado</h2>
+  <div>Classe estimada: <span class="big" id="classe"></span></div>
+  <div class="bar"><div class="roubo" id="br"></div><div class="furto" id="bf"></div></div>
+  <div class="leg"><span id="lr"></span><span id="lf"></span></div>
+</section>
+
+<div class="aviso"><strong>Como interpretar:</strong> considerando que uma ocorrência aconteceu com estas características, o modelo atribui essas probabilidades às classes “roubo” e “furto”. <strong>Isto não é a chance de um crime acontecer</strong> naquele bairro, dia ou horário; o modelo não calcula risco.</div>
+<p class="meta" id="meta"></p>
+</main>
+<script>
+const D = /*DADOS*/null;
+const ROT = {bairro:"Bairro", periodo:"Período do dia", dia_semana:"Dia da semana", tipo_local:"Tipo de local", subtipo_local:"Subtipo de local", marca:"Marca do celular"};
+const PAD = {bairro:"OUTROS", periodo:"noite", dia_semana:"sexta", tipo_local:"Via Pública", subtipo_local:"Via Pública", marca:"Apple"};
+const ORD = {dia_semana:["segunda","terça","quarta","quinta","sexta","sábado","domingo"], periodo:["madrugada","manhã","tarde","noite","não informado"]};
+const pct = x => (x * 100).toFixed(1).replace(".", ",") + "%";
+
+function opcoes(f){ const c = D.categorias[f]; return ORD[f] ? ORD[f].filter(o => c.includes(o)) : [...c].sort((a,b) => a.localeCompare(b, "pt")); }
+const campos = document.getElementById("campos");
+D.features.forEach(f => {
+  const d = document.createElement("div");
+  d.innerHTML = `<label for="${f}">${ROT[f]}</label><select id="${f}" name="${f}">` +
+    opcoes(f).map(o => `<option value="${o}"${o === PAD[f] ? " selected" : ""}>${o}</option>`).join("") + "</select>";
+  campos.appendChild(d);
+});
+
+// one-hot na mesma ordem do OneHotEncoder do treino
+function codificar(e){ const x = []; D.features.forEach(f => D.categorias[f].forEach(c => x.push(e[f] === c ? 1 : 0))); return x; }
+function densa(x, W, b, act){
+  const y = b.slice();
+  for (let i = 0; i < x.length; i++) if (x[i]) for (let j = 0; j < y.length; j++) y[j] += x[i] * W[i][j];
+  return y.map(v => act === "relu" ? Math.max(0, v) : act === "tanh" ? Math.tanh(v) : 1 / (1 + Math.exp(-v)));
+}
+function prever(e){
+  let x = codificar(e);
+  D.ativacoes.forEach((a, i) => { x = densa(x, D.pesos.W[i], D.pesos.b[i], a); });
+  return x[0];
+}
+document.getElementById("form").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const e = {}; D.features.forEach(f => e[f] = document.getElementById(f).value);
+  const p = prever(e), q = 1 - p, c = p >= 0.5 ? "roubo" : "furto";
+  const el = document.getElementById("classe"); el.textContent = c.toUpperCase(); el.style.color = `var(--${c})`;
+  const br = document.getElementById("br"), bf = document.getElementById("bf");
+  br.style.width = (p * 100).toFixed(1) + "%"; bf.style.width = (q * 100).toFixed(1) + "%";
+  br.textContent = p >= 0.12 ? "roubo " + pct(p) : ""; bf.textContent = q >= 0.12 ? "furto " + pct(q) : "";
+  document.getElementById("lr").textContent = "Roubo: " + pct(p); document.getElementById("lf").textContent = "Furto: " + pct(q);
+  document.getElementById("res").hidden = false;
+});
+document.getElementById("meta").textContent = `Modelo: ${D.modelo} · acurácia no teste ${pct(D.acc)} · F1 (roubo) ${pct(D.f1)} · treinado com ${D.n.toLocaleString("pt-BR")} boletins. As probabilidades vêm de uma rede neural com limitações: use como exercício acadêmico.`;
+</script>
+</body></html>
